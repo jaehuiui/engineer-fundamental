@@ -95,6 +95,66 @@ node_modules/
 | 충돌 시 | 에러 | 경고 | 에러 | 경고 | 에러 |
 | 우회 플래그 | `--legacy-peer-deps` | - | - | `--no-strict-peer-dependencies` | - |
 
+### peerDependencies가 없으면 어떻게 되는가? (What Happens When peerDeps Are Missing?)
+
+peerDependencies가 설치되지 않으면 해당 패키지는 제대로 동작하지 않는다.
+
+**런타임 에러 발생 (Runtime Error):**
+```js
+// my-react-component-lib 내부 코드
+import React from 'react';  // ← react가 없으면 여기서 터짐
+
+// Error: Cannot find module 'react'
+```
+
+**버전 불일치 (Version Mismatch):**
+```
+peerDependencies: { "react": "^18.0.0" }
+설치된 react: 17.0.2
+
+→ 설치는 되지만, 런타임에 API 불일치로 에러 가능
+  예: React 18의 useId() 훅을 쓰는 라이브러리 + React 17 = TypeError
+```
+
+**중복 설치 (Duplicate Installation) — peerDep 대신 dependencies로 넣은 경우:**
+```
+node_modules/
+├── react@18.2.0/                    ← 앱의 React
+└── my-lib/
+    └── node_modules/
+        └── react@18.3.0/           ← 라이브러리의 React (다른 인스턴스!)
+
+→ React가 2개 → Context 공유 안 됨, hooks 규칙 위반 (Rules of Hooks Violation)
+  "Invalid hook call. Hooks can only be called inside the body of a function component."
+```
+
+이게 peerDependencies가 존재하는 이유. 싱글턴이어야 하는 패키지 (Singleton Packages)의 중복을 방지한다.
+
+**자동 설치하지 않는 패키지 매니저 (pnpm, yarn classic) 사용 시:**
+```bash
+# pnpm — 경고 출력, 직접 설치 필요
+pnpm install my-react-component-lib
+#   WARN  Issues with peer dependencies found
+#   └── ✕ missing peer react@"^18.0.0"
+
+pnpm add react    # 직접 설치해야 함
+```
+
+**라이브러리 개발자가 해야 할 일 (What Library Authors Should Do):**
+```json
+{
+  "peerDependencies": {
+    "react": "^17.0.0 || ^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "react": "^18.2.0"
+  }
+}
+```
+- `peerDependencies`: 소비자에게 "이거 필요해"라고 알림 (Declaration)
+- `devDependencies`: 개발/테스트 시에는 직접 설치해서 사용 (Development)
+- 버전 범위를 넓게 잡아서 호환성 극대화 (Wide Version Range)
+
 ## Phantom Dependency 문제
 
 ```js
